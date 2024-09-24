@@ -7,6 +7,7 @@ import main.java.service.ClientService;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.InputMismatchException;
 
 public class ClientMenu {
     private final ClientService clientService;
@@ -17,49 +18,70 @@ public class ClientMenu {
         scanner = new Scanner(System.in);
     }
 
-
     public void clientMenu() {
         int choice;
 
         do {
-            System.out.println("\n--- Client Management Menu ---");
-            System.out.println("1. Save new client");
-            System.out.println("2. Find all clients");
-            System.out.println("3. Find client by ID");
-            System.out.println("4. Update client");
-            System.out.println("5. Delete client");
-            System.out.println("6. Exit");
+            displayMenu();
+            choice = getValidIntInput("Enter your choice: ", 1, 6);
 
-            System.out.print("Enter your choice: ");
-            choice = scanner.nextInt();
-
-            switch (choice) {
-                case 1:
-                    addNewClient();
-                    break;
-                case 2:
-                    findAll();
-                    break;
-                case 3:
-                    findById();
-                    break;
-                case 4:
-                    update();
-                    break;
-                case 5:
-                    delete();
-                    break;
-                case 6:
-                    System.out.println("Exiting client menu...");
-                    break;
-                default:
-                    System.out.println("Invalid choice. Please try again.");
-                    break;
+            try {
+                switch (choice) {
+                    case 1:
+                        addNewClient();
+                        break;
+                    case 2:
+                        findAll();
+                        break;
+                    case 3:
+                        findById();
+                        break;
+                    case 4:
+                        update();
+                        break;
+                    case 5:
+                        delete();
+                        break;
+                    case 6:
+                        System.out.println("Exiting client menu...");
+                        break;
+                }
+            } catch (ClientNotFoundException e) {
+                System.out.println("Error: " + e.getMessage());
+            } catch (Exception e) {
+                System.out.println("An unexpected error occurred: " + e.getMessage());
             }
         } while (choice != 6);
     }
 
+    private void displayMenu() {
+        System.out.println("\n--- Client Management Menu ---");
+        System.out.println("1. Save new client");
+        System.out.println("2. Find all clients");
+        System.out.println("3. Find client by ID");
+        System.out.println("4. Update client");
+        System.out.println("5. Delete client");
+        System.out.println("6. Exit");
+    }
 
+    private int getValidIntInput(String prompt, int min, int max) {
+        int input;
+        do {
+            System.out.print(prompt);
+            try {
+                input = scanner.nextInt();
+                if (input < min || input > max) {
+                    System.out.println("Invalid input. Please enter a number between " + min + " and " + max + ".");
+                } else {
+                    return input;
+                }
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input. Please enter a valid number.");
+                scanner.nextLine(); // Clear the invalid input
+                input = min - 1; // Set input to an invalid value to continue the loop
+            }
+        } while (true);
+    }
 
     public Client searchByName(String name) {
         Optional<Client> optionalClient = this.clientService.findByName(name);
@@ -86,93 +108,147 @@ public class ClientMenu {
         }
     }
 
-
     public Client addNewClient() {
         System.out.println("\n--- Add a new client ---");
-        System.out.print("Enter the name for a client : ");
-        String name = scanner.nextLine();
-        System.out.print("Enter the address for a client : ");
-        String address = scanner.nextLine();
-        System.out.print("Enter the phone number for a client : ");
-        String phoneNumber = scanner.nextLine();
-        System.out.print("Enter status for a client is professional or not : ");
-        boolean status = scanner.nextBoolean();
+        scanner.nextLine();
+        String name = getValidStringInput("Enter the name for a client: ");
+        String address = getValidStringInput("Enter the address for a client: ");
+        String phoneNumber = getValidStringInput("Enter the phone number for a client: ");
+        boolean status = getValidBooleanInput("Is the client professional? (true/false): ");
+
         Client client = new Client(0L, name, address, phoneNumber, status);
-        return clientService.save(client);
+        Client savedClient = clientService.save(client);
+        System.out.println("Client added successfully!");
+        return savedClient;
     }
 
     public void findById() {
         System.out.println("\n--- Find client by id ---");
-        System.out.print("Enter id: ");
-        Long id = scanner.nextLong();
+        Long id = getValidLongInput("Enter id: ");
 
-        clientService.findById(id).ifPresent(client -> {
-            System.out.printf("+--------------------+-----------------------------+----------------+--------------+%n");
-            System.out.printf("| %-18s | %-27s | %-14s | %-12s |%n",
-                    "Name", "Address", "Phone", "Professional");
-            System.out.printf("+--------------------+-----------------------------+----------------+--------------+%n");
-
-            System.out.printf("| %-18s | %-27s | %-14s | %-12s |%n",
-                    client.getName(),
-                    client.getAddress(),
-                    client.getPhone(),
-                    client.isProfessional() ? "Yes" : "No");
-
-            System.out.printf("+--------------------+-----------------------------+----------------+--------------+%n");
-
-            System.out.println("Client found!");
-        });
-
+        try {
+            Client client = clientService.findById(id)
+                    .orElseThrow(() -> new ClientNotFoundException("Client not found with id: " + id));
+            displayClientInfo(client);
+        } catch (ClientNotFoundException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
     }
-
 
     public void update() {
         System.out.println("\n--- Update client ---");
-        System.out.print("Enter the Id  : ");
-        Long id = scanner.nextLong();
-        Client clientOpt = clientService.findById(id).orElseThrow(() -> new ClientNotFoundException("Client Not Found"));
-        System.out.print("Enter new name: ");
-        String name = scanner.nextLine();
-        System.out.print("Enter new address: ");
-        String address = scanner.nextLine();
-        System.out.print("Enter new phone number: ");
-        String phoneNumber = scanner.nextLine();
-        System.out.print("Enter if  professional: ");
-        boolean status = scanner.nextBoolean();
-        Client client1 = new Client(id, name, address, phoneNumber, status);
-        clientService.update(client1);
-    }
+        Long id = getValidLongInput("Enter the Id: ");
 
+        try {
+            Client clientToUpdate = clientService.findById(id)
+                    .orElseThrow(() -> new ClientNotFoundException("Client not found with id: " + id));
+
+            scanner.nextLine(); // Consume newline
+            String name = getValidStringInput("Enter new name: ");
+            String address = getValidStringInput("Enter new address: ");
+            String phoneNumber = getValidStringInput("Enter new phone number: ");
+            boolean status = getValidBooleanInput("Is the client professional? (true/false): ");
+
+            Client updatedClient = new Client(id, name, address, phoneNumber, status);
+            clientService.update(updatedClient);
+            System.out.println("Client updated successfully!");
+        } catch (ClientNotFoundException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
 
     public void delete() {
         System.out.println("\n--- Delete client ---");
-        System.out.print("Enter id: ");
-        Long id = scanner.nextLong();
-        boolean client = clientService.delete(id);
-        if (client){
-            System.out.println("Client deleted!");
-        }else{
-            System.out.println("Client not found");
+        Long id = getValidLongInput("Enter id: ");
+
+        try {
+            Client clientToDelete = clientService.findById(id)
+                    .orElseThrow(() -> new ClientNotFoundException("Client not found with id: " + id));
+            displayClientInfo(clientToDelete);
+
+            if (getValidBooleanInput("Are you sure you want to delete this client? (true/false): ")) {
+                boolean deleted = clientService.delete(id);
+                if (deleted) {
+                    System.out.println("Client deleted successfully!");
+                } else {
+                    System.out.println("Failed to delete client.");
+                }
+            } else {
+                System.out.println("Deletion cancelled.");
+            }
+        } catch (ClientNotFoundException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
     public void findAll() {
         List<Client> clientList = clientService.findAll();
 
+        if (clientList.isEmpty()) {
+            System.out.println("No clients found.");
+            return;
+        }
+
+        displayClientTable(clientList);
+    }
+
+    private void displayClientInfo(Client client) {
+        System.out.println("Name: " + client.getName());
+        System.out.println("Address: " + client.getAddress());
+        System.out.println("Phone number: " + client.getPhone());
+        System.out.println("Professional: " + (client.isProfessional() ? "Yes" : "No"));
+    }
+
+    private void displayClientTable(List<Client> clientList) {
         System.out.printf("+--------------------+-----------------------------+----------------+--------------+%n");
         System.out.printf("| %-18s | %-27s | %-14s | %-12s |%n",
                 "Name", "Address", "Phone", "Professional");
         System.out.printf("+--------------------+-----------------------------+----------------+--------------+%n");
 
-        clientList.forEach(client -> {
+        for (Client client : clientList) {
             System.out.printf("| %-18s | %-27s | %-14s | %-12s |%n",
                     client.getName(),
                     client.getAddress(),
                     client.getPhone(),
                     client.isProfessional() ? "Yes" : "No");
-        });
+        }
         System.out.printf("+--------------------+-----------------------------+----------------+--------------+%n");
     }
 
+    private String getValidStringInput(String prompt) {
+        String input;
+        do {
+            System.out.print(prompt);
+            input = scanner.nextLine().trim();
+            if (input.isEmpty()) {
+                System.out.println("Input cannot be empty. Please try again.");
+            } else {
+                return input;
+            }
+        } while (true);
+    }
 
+    private boolean getValidBooleanInput(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String input = scanner.nextLine().trim().toLowerCase();
+            if (input.equals("true") || input.equals("false")) {
+                return Boolean.parseBoolean(input);
+            } else {
+                System.out.println("Invalid input. Please enter 'true' or 'false'.");
+            }
+        }
+    }
+
+    private Long getValidLongInput(String prompt) {
+        while (true) {
+            try {
+                System.out.print(prompt);
+                return scanner.nextLong();
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input. Please enter a valid number.");
+                scanner.nextLine(); // Clear the invalid input
+            }
+        }
+    }
 }

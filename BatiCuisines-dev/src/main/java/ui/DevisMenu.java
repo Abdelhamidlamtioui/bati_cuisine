@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.InputMismatchException;
 
 public class DevisMenu {
 
@@ -35,12 +36,10 @@ public class DevisMenu {
             System.out.println("3. Find All Devis");
             System.out.println("4. Find Devis by ID");
             System.out.println("5. Update Devis");
-            System.out.println("6. Accept  Devis");
+            System.out.println("6. Accept Devis");
             System.out.println("7. Exit");
-            System.out.print("Choose an option: ");
 
-            int choice = scanner.nextInt();
-            scanner.nextLine();
+            int choice = getValidIntInput("Choose an option: ", 1, 7);
 
             switch (choice) {
                 case 1:
@@ -64,195 +63,254 @@ public class DevisMenu {
                 case 7:
                     System.out.println("Exiting...");
                     return;
-                default:
-                    System.out.println("Invalid choice. Please try again.");
             }
         }
     }
 
-
-    public void save(Devis devis){
-        devisService.save(devis);
+    public void save(Devis devis) {
+        try {
+            devisService.save(devis);
+            System.out.println("Devis saved successfully.");
+        } catch (Exception e) {
+            System.out.println("Error saving Devis: " + e.getMessage());
+        }
     }
-
 
     private void saveDevis() {
-        System.out.print("Enter Project Name: ");
-        String projectName = scanner.nextLine();
-        Project project = null;
         try {
-            project = projectService.findProjectByName(projectName);
-        } catch (ProjectNotFoundException projectNotFoundException) {
-            System.out.println(projectNotFoundException.getMessage());
-            return;
+            System.out.print("Enter Project Name: ");
+            String projectName = scanner.nextLine();
+            Project project = projectService.findProjectByName(projectName);
+
+            double estimatedAmount = getValidDoubleInput("Enter estimated amount: ", 0, Double.MAX_VALUE);
+
+            LocalDate issueDate = getValidDate("Enter issue date (yyyy-MM-dd): ");
+            LocalDate validatedDate = getValidDate("Enter validated date (yyyy-MM-dd): ");
+
+            Devis devis = new Devis(0L, estimatedAmount, issueDate, validatedDate, false, project);
+            save(devis);
+        } catch (ProjectNotFoundException e) {
+            System.out.println("Error: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("An unexpected error occurred: " + e.getMessage());
         }
-
-        System.out.print("Enter estimated amount: ");
-        double estimatedAmount = scanner.nextDouble();
-        scanner.nextLine();
-
-        System.out.print("Enter issue date (yyyy-MM-dd): ");
-        String issueDate = scanner.nextLine();
-        LocalDate issueDateParse = DateFormat.parseDate(issueDate);
-
-        System.out.print("Enter validated date (yyyy-MM-dd): ");
-        String validatedDate = scanner.nextLine();
-        LocalDate validatedDateParse = DateFormat.parseDate(validatedDate);
-
-        Devis devis = new Devis(0L, estimatedAmount, issueDateParse, validatedDateParse, false, project);
-        devisService.save(devis);
     }
 
-
     private void delete() {
-        System.out.print("Enter Devis ID: ");
-        Long id = scanner.nextLong();
-        scanner.nextLine();
-        devisService.delete(id);
+        try {
+            Long id = getValidLongInput("Enter Devis ID: ", 1L, Long.MAX_VALUE);
+            devisService.delete(id);
+            System.out.println("Devis deleted successfully.");
+        } catch (DevisNotFoundException e) {
+            System.out.println("Error: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("An unexpected error occurred: " + e.getMessage());
+        }
     }
 
     public void findAll() {
-        List<Devis> devisList = devisService.findAll();
+        try {
+            List<Devis> devisList = devisService.findAll();
+            if (devisList.isEmpty()) {
+                System.out.println("No Devis found.");
+                return;
+            }
+            printDevisTable(devisList);
+        } catch (Exception e) {
+            System.out.println("An error occurred while fetching Devis: " + e.getMessage());
+        }
+    }
+
+    private void findById() {
+        try {
+            Long id = getValidLongInput("Enter Devis ID: ", 1L, Long.MAX_VALUE);
+            Optional<Devis> devis = devisService.findById(id);
+            devis.ifPresentOrElse(
+                    this::printSingleDevis,
+                    () -> System.out.println("Devis not found.")
+            );
+        } catch (Exception e) {
+            System.out.println("An error occurred: " + e.getMessage());
+        }
+    }
+
+    public void update() {
+        try {
+            Long id = getValidLongInput("Enter Devis ID: ", 1L, Long.MAX_VALUE);
+            Optional<Devis> existingDevis = devisService.findById(id);
+            if (existingDevis.isEmpty()) {
+                System.out.println("Devis not found.");
+                return;
+            }
+
+            double estimatedAmount = getValidDoubleInput("Enter new estimated amount: ", 0, Double.MAX_VALUE);
+            LocalDate issueDate = getValidDate("Enter new issue date (yyyy-MM-dd): ");
+            LocalDate validatedDate = getValidDate("Enter new validated date (yyyy-MM-dd): ");
+
+            System.out.print("Enter Project Name: ");
+            String projectName = scanner.nextLine();
+            Project project = projectService.findProjectByName(projectName);
+
+            Devis updatedDevis = new Devis(id, estimatedAmount, issueDate, validatedDate, existingDevis.get().isAccepted(), project);
+            devisService.update(updatedDevis);
+            System.out.println("Devis updated successfully.");
+        } catch (ProjectNotFoundException | DevisNotFoundException e) {
+            System.out.println("Error: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("An unexpected error occurred: " + e.getMessage());
+        }
+    }
+
+    public void findDevisByProject(Long projectId) {
+        try {
+            Optional<Devis> devisOptional = this.devisService.findDevisByproject(projectId);
+            devisOptional.ifPresentOrElse(
+                    this::printSingleDevis,
+                    () -> System.out.println("No Devis found for the given project.")
+            );
+        } catch (DevisNotFoundException e) {
+            System.out.println("Error: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("An unexpected error occurred: " + e.getMessage());
+        }
+    }
+
+    public void acceptDevis() {
+        try {
+            System.out.print("Enter Project Name: ");
+            String projectName = scanner.nextLine();
+            Project project = this.projectService.findProjectByName(projectName);
+
+            Optional<Devis> devis = this.devisService.findDevisByproject(project.getId());
+            if (devis.isPresent()) {
+                if (getYesNoInput("Do you want to accept this devis? (y/n): ")) {
+                    this.devisService.updateDevisStatus(devis.get().getId());
+                    this.projectService.updateProjectStatus(project.getId(), ProjectStatus.FINISHED.name());
+                    System.out.println("Devis accepted. Project status updated to FINISHED.");
+                } else {
+                    System.out.println("Devis not accepted.");
+                }
+            } else {
+                System.out.println("Devis not found for the given project.");
+            }
+        } catch (ProjectNotFoundException | DevisNotFoundException e) {
+            System.out.println("Error: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("An unexpected error occurred: " + e.getMessage());
+        }
+    }
+
+    private void printDevisTable(List<Devis> devisList) {
         System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
         System.out.printf("| %-12s | %-17s | %-12s | %-12s | %-11s | %-18s | %-18s |%n",
                 "Devis ID", "Estimated Amount", "Issue Date", "Validated Date", "Is Accepted", "Project Name", "Client Name");
         System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
 
-        devisList.forEach(devis -> {
-            System.out.printf("| %-12d | %-17.2f | %-12s | %-12s | %-11b | %-18s | %-18s |%n",
-                    devis.getId(),
-                    devis.getEstimatedAmount(),
-                    devis.getIssueDate(),
-                    devis.getValidatedDate(),
-                    devis.isAccepted(),
-                    devis.getProject().getProjectName(),
-                    devis.getProject().getClient().getName()
-            );
-        });
+        devisList.forEach(this::printDevisRow);
 
         System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
     }
 
+    private void printSingleDevis(Devis devis) {
+        System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
+        System.out.printf("| %-12s | %-17s | %-12s | %-12s | %-11s | %-18s | %-18s |%n",
+                "Devis ID", "Estimated Amount", "Issue Date", "Validated Date", "Is Accepted", "Project Name", "Client Name");
+        System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
 
-    private void findById() {
-        System.out.print("Enter Devis ID: ");
-        Long id = scanner.nextLong();
-        scanner.nextLine();
-        Optional<Devis> devis = devisService.findById(id);
+        printDevisRow(devis);
 
-        devis.ifPresent(devis1 -> {
-            System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
-            System.out.printf("| %-12s | %-17s | %-12s | %-12s | %-11s | %-18s | %-18s |%n",
-                    "Devis ID", "Estimated Amount", "Issue Date", "Validated Date", "Is Accepted", "Project Name", "Client Name");
-            System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
-
-            System.out.printf("| %-12d | %-17.2f | %-12s | %-12s | %-11b | %-18s | %-18s |%n",
-                    devis1.getId(),
-                    devis1.getEstimatedAmount(),
-                    devis1.getIssueDate(),
-                    devis1.getValidatedDate(),
-                    devis1.isAccepted(),
-                    devis1.getProject().getProjectName(),
-                    devis1.getProject().getClient().getName()
-            );
-            System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
-        });
+        System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
     }
 
-
-    public void update() {
-        System.out.print("Enter Devis ID: ");
-        Long id = scanner.nextLong();
-        System.out.print("Enter estimatedAmount");
-        double estimatedAmount = scanner.nextDouble();
-        System.out.print("Enter issueDate (yyyy-MM-dd) : ");
-        String issueDate = scanner.nextLine();
-        LocalDate issueDateParse = DateFormat.parseDate(issueDate);
-        System.out.print("Enter validated date (yyyy-MM-dd): ");
-        String validatedDate = scanner.nextLine();
-        LocalDate validatedDateParse = DateFormat.parseDate(validatedDate);
-        System.out.print("Enter Project Name: ");
-        String projectName = scanner.nextLine();
-        Project project = null;
-        try {
-            project = projectService.findProjectByName(projectName);
-        } catch (ProjectNotFoundException projectNotFoundException) {
-            System.out.println(projectNotFoundException.getMessage());
-            return;
-        }
-        Devis devis = new Devis(id, estimatedAmount, issueDateParse, validatedDateParse, false, project);
-        devisService.update(devis);
+    private void printDevisRow(Devis devis) {
+        System.out.printf("| %-12d | %-17.2f | %-12s | %-12s | %-11b | %-18s | %-18s |%n",
+                devis.getId(),
+                devis.getEstimatedAmount(),
+                devis.getIssueDate(),
+                devis.getValidatedDate() != null ? devis.getValidatedDate() : "N/A",
+                devis.isAccepted(),
+                devis.getProject().getProjectName() != null ? devis.getProject().getProjectName() : "N/A",
+                devis.getProject().getClient().getName() != null ? devis.getProject().getClient().getName() : "N/A"
+        );
     }
 
-    public void findDevisByProject(Long projectId) {
-        Optional<Devis> devisOptional = this.devisService.findDevisByproject(projectId);
-
-        devisOptional.ifPresent(devis1 -> {
-            System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
-            System.out.printf("| %-12s | %-17s | %-12s | %-12s | %-11s | %-18s | %-18s |%n",
-                    "Devis ID", "Estimated Amount", "Issue Date", "Validated Date", "Is Accepted", "Project Name", "Client Name");
-            System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
-
-            System.out.printf("| %-12d | %-17.2f | %-12s | %-12s | %-11b | %-18s | %-18s |%n",
-                    devis1.getId(),
-                    devis1.getEstimatedAmount(),
-                    devis1.getIssueDate(),
-                    devis1.getValidatedDate() != null ? devis1.getValidatedDate() : "N/A",
-                    devis1.isAccepted(),
-                    devis1.getProject().getProjectName() != null ? devis1.getProject().getProjectName() : "N/A",
-                    devis1.getProject().getClient().getName() != null ? devis1.getProject().getClient().getName() : "N/A"
-            );
-
-            System.out.printf("+--------------+-------------------+--------------+--------------+-------------+--------------------+--------------------+%n");
-        });
-
-        devisOptional.orElseThrow(() -> new DevisNotFoundException("Devis not found!"));
-    }
-
-    public void acceptDevis() {
-        Project project = null;
-
-        System.out.println("Enter Project Name: ");
-        String projectName = scanner.nextLine();
-
-        try {
-            project = this.projectService.findProjectByName(projectName);
-        } catch (ProjectNotFoundException projectNotFoundException) {
-            System.out.println(projectNotFoundException.getMessage());
-            return;
-        }
-
-        if (project == null) {
-            System.out.println("Project not found.");
-            return;
-        }
-
-        Long projectId = project.getId();
-        Optional<Devis> devis = Optional.empty();
-
-        try {
-            devis = this.devisService.findDevisByproject(projectId);
-        } catch (DevisNotFoundException devisNotFoundException) {
-            System.out.println(devisNotFoundException.getMessage());
-            return;
-        }
-
-        if (devis.isPresent()) {
-            System.out.println("Do you want to accept this devis? (y/n): ");
-            String choice = scanner.nextLine();
-
-            if (choice.equalsIgnoreCase("y") || choice.equalsIgnoreCase("yes")) {
-                this.devisService.updateDevisStatus(devis.get().getId());
-                this.projectService.updateProjectStatus(projectId , ProjectStatus.FINISHED.name());
-                System.out.println("Devis accepted.");
-                System.out.println("Project accepted.");
-            } else {
-                System.out.println("Devis not accepted.");
+    private int getValidIntInput(String prompt, int min, int max) {
+        while (true) {
+            try {
+                System.out.print(prompt);
+                int input = scanner.nextInt();
+                scanner.nextLine(); // Consume newline
+                if (input >= min && input <= max) {
+                    return input;
+                } else {
+                    System.out.println("Please enter a number between " + min + " and " + max + ".");
+                }
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input. Please enter a valid number.");
+                scanner.nextLine(); // Clear the invalid input
             }
-        } else {
-            System.out.println("Devis not found.");
         }
     }
 
+    private long getValidLongInput(String prompt, long min, long max) {
+        while (true) {
+            try {
+                System.out.print(prompt);
+                long input = scanner.nextLong();
+                scanner.nextLine(); // Consume newline
+                if (input >= min && input <= max) {
+                    return input;
+                } else {
+                    System.out.println("Please enter a number between " + min + " and " + max + ".");
+                }
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input. Please enter a valid number.");
+                scanner.nextLine(); // Clear the invalid input
+            }
+        }
+    }
 
+    private double getValidDoubleInput(String prompt, double min, double max) {
+        while (true) {
+            try {
+                System.out.print(prompt);
+                double input = scanner.nextDouble();
+                scanner.nextLine(); // Consume newline
+                if (input >= min && input <= max) {
+                    return input;
+                } else {
+                    System.out.println("Please enter a number between " + min + " and " + max + ".");
+                }
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input. Please enter a valid number.");
+                scanner.nextLine(); // Clear the invalid input
+            }
+        }
+    }
+
+    private LocalDate getValidDate(String prompt) {
+        while (true) {
+            try {
+                System.out.print(prompt);
+                String dateString = scanner.nextLine();
+                return DateFormat.parseDate(dateString);
+            } catch (Exception e) {
+                System.out.println("Invalid date format. Please use yyyy-MM-dd.");
+            }
+        }
+    }
+
+    private boolean getYesNoInput(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String input = scanner.nextLine().trim().toLowerCase();
+            if (input.equals("y") || input.equals("yes")) {
+                return true;
+            } else if (input.equals("n") || input.equals("no")) {
+                return false;
+            } else {
+                System.out.println("Invalid input. Please enter 'y' or 'n'.");
+            }
+        }
+    }
 }

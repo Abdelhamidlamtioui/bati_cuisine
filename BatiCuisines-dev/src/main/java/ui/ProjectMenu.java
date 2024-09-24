@@ -34,8 +34,13 @@ public class ProjectMenu {
             System.out.println("3. Exit");
 
             System.out.print("Enter your choice: ");
-            int choice = scanner.nextInt();
-            scanner.nextLine();
+            int choice;
+            try {
+                choice = Integer.parseInt(scanner.nextLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a number.");
+                continue;
+            }
 
             switch (choice) {
                 case 1:
@@ -55,8 +60,15 @@ public class ProjectMenu {
 
     private void searchClient() {
         System.out.println("\n--- Search for an Existing Client ---");
-        System.out.print("Enter the name of the client: ");
-        String name = scanner.nextLine();
+        String name;
+        do {
+            System.out.print("Enter the name of the client: ");
+            name = scanner.nextLine().trim();
+            if (name.isEmpty()) {
+                System.out.println("Client name cannot be empty. Please try again.");
+            }
+        } while (name.isEmpty());
+
         Client optionalClient = clientMenu.searchByName(name);
         if (optionalClient != null) {
             selectedClient = optionalClient;
@@ -83,26 +95,45 @@ public class ProjectMenu {
     private void addProject() {
         try {
             System.out.println("\n--- Add a New Project ---");
-            System.out.print("Enter the name of the project: ");
-            String name = scanner.nextLine();
-            System.out.print("Enter the surface area for the project: ");
-            double surface = scanner.nextDouble();
-            scanner.nextLine();
+            String name = "";
+            while (name.trim().isEmpty()) {
+                System.out.print("Enter the name of the project: ");
+                name = scanner.nextLine().trim();
+                if (name.isEmpty()) {
+                    System.out.println("Project name cannot be empty. Please try again.");
+                }
+            }
+
+            double surface = 0;
+            while (surface <= 0) {
+                System.out.print("Enter the surface area for the project: ");
+                try {
+                    surface = Double.parseDouble(scanner.nextLine().trim());
+                    if (surface <= 0) {
+                        System.out.println("Surface area must be greater than 0. Please try again.");
+                    }
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid input. Please enter a valid number for surface area.");
+                }
+            }
 
             Project project = new Project(0L, name, 0, 0, ProjectStatus.INPROGRESS.name(), surface, selectedClient);
             Project savedProject = projectService.save(project);
 
+            System.out.println("Project saved successfully. ID: " + savedProject.getId());
+
+            System.out.println("\nNow let's add materials to the project.");
             Material savedMaterial = materialMenu.addMaterial(savedProject);
+
+            System.out.println("\nNow let's add workforce to the project.");
             WorkForce savedWorkForce = workForceMenu.addWorkForce(savedProject);
 
-//            savedProject.addComponent(savedMaterial.getComponent());
-//            savedProject.addComponent(savedWorkForce.getComponent());
+            System.out.println("\nProject, Material, and Workforce have been added successfully.");
 
         } catch (Exception e) {
             System.out.println("An error occurred while adding the project: " + e.getMessage());
         }
     }
-
 
     public void findAll() {
         projectService.findAll().forEach(project -> {
@@ -134,22 +165,17 @@ public class ProjectMenu {
                             System.out.println("Material ID: " + material.getId());
                             System.out.println("Material: " + material.getName());
                             System.out.println("VAT Rate: " + material.getVatRate());
-
                         }
                 );
 
                 component.getWorkForces().forEach(workForce -> {
                     System.out.println("Work Force ID: " + workForce.getId());
                     System.out.println("Work Force: " + workForce.getName());
-                    System.out.println("Work Force: " + workForce.getName());
-
                 });
                 System.out.println();
             });
 
-
             System.out.println("-------------\n");
         });
     }
-
 }
